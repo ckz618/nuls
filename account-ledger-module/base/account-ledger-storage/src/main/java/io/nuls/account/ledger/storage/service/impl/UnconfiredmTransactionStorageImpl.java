@@ -39,10 +39,10 @@ import io.nuls.kernel.lite.core.bean.InitializingBean;
 import io.nuls.kernel.model.NulsDigestData;
 import io.nuls.kernel.model.Result;
 import io.nuls.kernel.model.Transaction;
+import io.nuls.ledger.util.LedgerUtil;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * author Facjas
@@ -55,6 +55,7 @@ public class UnconfiredmTransactionStorageImpl implements UnconfirmedTransaction
     private DBService dbService;
 
     private long sequence = System.currentTimeMillis();
+    private Map<NulsDigestData, UnconfirmedTxPo> cacheMaps = new ConcurrentHashMap<>();
 
     @Override
     public void afterPropertiesSet() throws NulsException {
@@ -71,6 +72,9 @@ public class UnconfiredmTransactionStorageImpl implements UnconfirmedTransaction
             sequence++;
             UnconfirmedTxPo po = new UnconfirmedTxPo(tx, sequence);
             result = dbService.put(AccountLedgerStorageConstant.DB_NAME_ACCOUNT_LEDGER_TX, hash.serialize(), po.serialize());
+            if(result.isSuccess()) {
+                cacheMaps.put(hash, po);
+            }
         } catch (Exception e) {
             e.printStackTrace();
             return Result.getFailed();
@@ -81,7 +85,11 @@ public class UnconfiredmTransactionStorageImpl implements UnconfirmedTransaction
     @Override
     public Result deleteUnconfirmedTx(NulsDigestData hash) {
         try {
-            return dbService.delete(AccountLedgerStorageConstant.DB_NAME_ACCOUNT_LEDGER_TX, hash.serialize());
+            Result result = dbService.delete(AccountLedgerStorageConstant.DB_NAME_ACCOUNT_LEDGER_TX, hash.serialize());
+            if(result.isSuccess()) {
+                cacheMaps.remove(hash);
+            }
+            return result;
         } catch (Exception e) {
             Log.info("deleteUnconfirmedTx error");
             return Result.getFailed();
@@ -91,12 +99,18 @@ public class UnconfiredmTransactionStorageImpl implements UnconfirmedTransaction
     @Override
     public Result<Transaction> getUnconfirmedTx(NulsDigestData hash) {
         try {
-            byte[] txBytes = dbService.get(AccountLedgerStorageConstant.DB_NAME_ACCOUNT_LEDGER_TX, hash.serialize());
-            if (txBytes == null) {
-                return Result.getSuccess();
+            UnconfirmedTxPo po = cacheMaps.get(hash);
+            if(po == null) {
+                byte[] txBytes = dbService.get(AccountLedgerStorageConstant.DB_NAME_ACCOUNT_LEDGER_TX, hash.serialize());
+                if (txBytes == null) {
+                    return Result.getSuccess();
+                }
+                po = new UnconfirmedTxPo(txBytes);
             }
-            UnconfirmedTxPo po = new UnconfirmedTxPo(txBytes);
-            Transaction tx = po.getTx();
+            Transaction tx = null;
+            if(po != null) {
+                tx = po.getTx();
+            }
             return Result.getSuccess().setData(tx);
         } catch (Exception e) {
             return Result.getFailed();
@@ -106,26 +120,33 @@ public class UnconfiredmTransactionStorageImpl implements UnconfirmedTransaction
     @Override
     public Result<List<Transaction>> loadAllUnconfirmedList() {
         Result result;
-        List<UnconfirmedTxPo> tmpList = new ArrayList<>();
-        List<Entry<byte[], byte[]>> txs = dbService.entryList(AccountLedgerStorageConstant.DB_NAME_ACCOUNT_LEDGER_TX);
+//        Collection<UnconfirmedTxPo> list = cacheMaps.values();
+        Collection<UnconfirmedTxPo> list = null;
+        List<UnconfirmedTxPo> tmpList;
+        if(list == null) {
+            tmpList = new ArrayList<>();
+            List<Entry<byte[], byte[]>> txs = dbService.entryList(AccountLedgerStorageConstant.DB_NAME_ACCOUNT_LEDGER_TX);
 
-        for (Entry<byte[], byte[]> txEntry : txs) {
-            try {
-                UnconfirmedTxPo tmpTx = new UnconfirmedTxPo(txEntry.getValue());
-                if (tmpTx != null) {
-                    tmpList.add(tmpTx);
+            for (Entry<byte[], byte[]> txEntry : txs) {
+                try {
+                    UnconfirmedTxPo tmpTx = new UnconfirmedTxPo(txEntry.getValue());
+                    if (tmpTx != null) {
+                        tmpList.add(tmpTx);
+                    }
+                } catch (Exception e) {
+                    Log.warn("parse local tx error", e);
                 }
-            } catch (Exception e) {
-                Log.warn("parse local tx error", e);
             }
+        } else {
+            tmpList = new ArrayList<>(list);
         }
 
-        tmpList.sort(new Comparator<UnconfirmedTxPo>() {
-            @Override
-            public int compare(UnconfirmedTxPo o1, UnconfirmedTxPo o2) {
-                return (int) (o1.getSequence() - o2.getSequence());
-            }
-        });
+//        tmpList.sort(new Comparator<UnconfirmedTxPo>() {
+//            @Override
+//            public int compare(UnconfirmedTxPo o1, UnconfirmedTxPo o2) {
+//                return (int) (o1.getSequence() - o2.getSequence());
+//            }
+//        });
 
         List<Transaction> resultList = new ArrayList<>();
         for(UnconfirmedTxPo po : tmpList) {

@@ -143,21 +143,22 @@ public class TransferTest {
 
 
     public static void main(String[] args) {
+
+        int successCount = 0;
+
         List<String> addressList = getAddressList();
         for (String toAddress : addressList) {
-            String address = "2CXJEuoXZMajeTEgL6TgiSxTRRMwiMM";
+            String address = "2CYqLxMgdSK5XaK9yBv43g6iEtpiAKJ";
 //            String toAddress = "2Cg7BLHWBSxMhq3FpjR9BrkyxXp4m4j";
-            long amount = 2000200000000L;
+            long amount = 100000000L;
             String password = "";
             String remark = "test";
 
             String param = "{\"address\": \"" + address + "\", \"toAddress\": \"" + toAddress + "\", \"password\": \"" + password + "\", \"amount\": \"" + amount + "\", \"remark\": \"" + remark + "\"}";
 
-            String url = "http://127.0.0.1:8001/api/accountledger/transfer";
+            String url = "http://127.0.0.1:8002/api/accountledger/transfer";
 
-            int successCount = 0;
-
-            for (int i = 0; i < 1; i++) {
+            for (int i = 0; i < 500; i++) {
                 String res = post(url, param, "utf-8");
 
                 if (res.indexOf("true") != -1) {
@@ -171,6 +172,7 @@ public class TransferTest {
 //                e.printStackTrace();
 //            }
             }
+//            if(true)return;
         }
     }
 

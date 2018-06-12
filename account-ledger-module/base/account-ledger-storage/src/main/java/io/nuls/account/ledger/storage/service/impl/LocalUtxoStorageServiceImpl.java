@@ -71,15 +71,16 @@ public class LocalUtxoStorageServiceImpl implements LocalUtxoStorageService, Ini
 
     @Override
     public List<Entry<byte[], byte[]>> loadAllCoinList() {
-        if(cacheMap == null) {
-            cacheMap = new HashMap<>();
+//        if(cacheMap == null) {
+//            cacheMap = new HashMap<>();
 
             List<Entry<byte[], byte[]>> coinList = dbService.entryList(AccountLedgerStorageConstant.DB_NAME_ACCOUNT_LEDGER_COINDATA);
-            for(Entry<byte[], byte[]> entry : coinList) {
-                cacheMap.put(new String(entry.getKey()), entry);
-            }
-        }
-        return new ArrayList<>(cacheMap.values());
+            return coinList;
+//            for(Entry<byte[], byte[]> entry : coinList) {
+//                cacheMap.put(new String(entry.getKey()), entry);
+//            }
+//        }
+//        return new ArrayList<>(cacheMap.values());
     }
 
     @Override
@@ -146,17 +147,25 @@ public class LocalUtxoStorageServiceImpl implements LocalUtxoStorageService, Ini
 
     @Override
     public Result batchSaveAndDeleteUTXO(List<Entry<byte[], byte[]>> utxosToSave, List<byte[]> utxosToDelete) {
-        BatchOperation batch = dbService.createWriteBatch(AccountLedgerStorageConstant.DB_NAME_ACCOUNT_LEDGER_COINDATA);
+//        BatchOperation batch = dbService.createWriteBatch(AccountLedgerStorageConstant.DB_NAME_ACCOUNT_LEDGER_COINDATA);
         for (byte[] key : utxosToDelete) {
-            batch.delete(key);
+//            batch.delete(key);
+            Result result = dbService.delete(AccountLedgerStorageConstant.DB_NAME_ACCOUNT_LEDGER_COINDATA, key);
+            if(!result.isSuccess()) {
+                return Result.getFailed().setData(0);
+            }
         }
         for(Entry<byte[], byte[]> entry : utxosToSave) {
-            batch.put(entry.getKey(), entry.getValue());
+//            batch.put(entry.getKey(), entry.getValue());
+            Result result = dbService.put(AccountLedgerStorageConstant.DB_NAME_ACCOUNT_LEDGER_COINDATA, entry.getKey(), entry.getValue());
+            if(!result.isSuccess()) {
+                return Result.getFailed().setData(0);
+            }
         }
-        Result batchResult = batch.executeBatch();
-        if (batchResult.isFailed()) {
-            return batchResult;
-        }
+//        Result batchResult = batch.executeBatch();
+//        if (batchResult.isFailed()) {
+//            return batchResult;
+//        }
         Result result = Result.getSuccess().setData(new Integer(utxosToSave.size() + utxosToDelete.size()));
 
         if(result.isSuccess() && cacheMap != null) {

@@ -40,6 +40,7 @@ import io.nuls.account.model.Account;
 import io.nuls.account.model.Address;
 import io.nuls.account.model.Balance;
 import io.nuls.account.service.AccountService;
+import io.nuls.core.tools.array.ArraysTool;
 import io.nuls.core.tools.crypto.Base58;
 import io.nuls.core.tools.log.Log;
 import io.nuls.core.tools.param.AssertUtil;
@@ -57,6 +58,7 @@ import io.nuls.kernel.model.*;
 import io.nuls.kernel.script.P2PKHScriptSig;
 import io.nuls.kernel.utils.AddressTool;
 import io.nuls.kernel.utils.TransactionFeeCalculator;
+import io.nuls.kernel.utils.VarInt;
 import io.nuls.kernel.validate.ValidateResult;
 import io.nuls.ledger.constant.LedgerErrorCode;
 import io.nuls.ledger.service.LedgerService;
@@ -64,6 +66,7 @@ import io.nuls.ledger.util.LedgerUtil;
 import io.nuls.protocol.model.tx.TransferTransaction;
 import io.nuls.protocol.service.BlockService;
 import io.nuls.protocol.service.TransactionService;
+import org.ehcache.impl.internal.classes.commonslang.ArrayUtils;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
@@ -202,19 +205,16 @@ public class AccountLedgerServiceImpl implements AccountLedgerService, Initializ
             time = System.nanoTime();
 
             if (!tx.isSystemTx()) {
-                Map<String, Coin> toCoinMap = addToCoinMap(tx);
-                result = this.ledgerService.verifyCoinData(tx, toCoinMap, null);
+                Map<String, Coin> toCoinMap = new HashMap<>();
+                //addToCoinMap(tx);
+                Set<String> fromSets = new HashSet<>();
+                List<Transaction> unconfirmedTxs = getAllUnconfirmedTransaction().getData();
+                convertTo(unconfirmedTxs, toCoinMap, fromSets);
+                result = this.ledgerService.verifyCoinData(tx, toCoinMap, fromSets);
                 if (result.isFailed()) {
                     Log.info("verifyCoinData failed : " + result.getMsg());
                     return result;
                 }
-//                List<Transaction> list = new ArrayList<>(this.getAllUnconfirmedTransaction().getData());
-//                list.add(tx);
-//                result = transactionService.conflictDetect(list);
-//                if (result.isFailed()) {
-//                    Log.info("verifyCoinData failed");
-//                    return result;
-//                }
             }
             tt2 += (System.nanoTime() - time);
             time = System.nanoTime();
@@ -223,6 +223,31 @@ public class AccountLedgerServiceImpl implements AccountLedgerService, Initializ
             return  res;
         } finally {
             saveLock.unlock();
+        }
+    }
+
+    private void convertTo(List<Transaction> unconfirmedTxs, Map<String, Coin> toCoinMap, Set<String> fromSets) {
+        for(Transaction tx : unconfirmedTxs) {
+            CoinData coinData = tx.getCoinData();
+            if(coinData == null) {
+                continue;
+            }
+            List<Coin> forms = coinData.getFrom();
+            List<Coin> tos = coinData.getTo();
+            for(Coin from : forms) {
+                boolean res = fromSets.add(LedgerUtil.asString(from.getOwner()));
+                if(!res) {
+                    System.out.println();
+                }
+            }
+            for(int i = 0 ; i < tos.size() ; i ++) {
+                Coin to = tos.get(i);
+                try {
+                    toCoinMap.put(LedgerUtil.asString(ArraysTool.joinintTogether(tx.getHash().serialize(), new VarInt(i).encode())), to);
+                } catch (IOException e) {
+                    Log.error(e);
+                }
+            }
         }
     }
 

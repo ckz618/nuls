@@ -96,7 +96,7 @@ public class LocalUtxoServiceImpl implements LocalUtxoService {
             byte[] fromSource;
             byte[] utxoFromSource;
             byte[] fromIndex;
-            Transaction sourceTx;
+            Transaction sourceTx = null;
             Coin fromOfFromCoin;
             for (Coin from : froms) {
                 fromSource = from.getOwner();
@@ -112,7 +112,7 @@ public class LocalUtxoServiceImpl implements LocalUtxoService {
                     try {
                         sourceTx = ledgerService.getTx(NulsDigestData.fromDigestHex(Hex.encode(utxoFromSource)));
                     } catch (Exception e) {
-                        continue;
+                        Log.error(e);
                     }
                     if (sourceTx == null) {
                         return Result.getFailed(AccountLedgerErrorCode.SOURCE_TX_NOT_EXSITS);
@@ -182,6 +182,8 @@ public class LocalUtxoServiceImpl implements LocalUtxoService {
             if (result.isFailed() || result.getData() == null || (int) result.getData() != toList.size() + fromsList.size()) {
                 return Result.getFailed();
             }
+        } else {
+            System.out.println();
         }
         return Result.getSuccess();
     }
